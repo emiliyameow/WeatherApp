@@ -1,3 +1,33 @@
 <resources>
-    <string name="app_name">Weather</string>
+    <string name="app_name">Погода</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="Degree">°</string>
+    <string name="DegreeIcon">°</string>
+    <string name="high_humidity">На улице может образоваться роса или туман.</string>
+    <string name="middle_humidity">На улице средняя влажность.</string>
+    <string name="low_humidity">Низкая влажность на улице.</string>
+    <string name="percent">%</string>
+    <string name="fact_temp">Примерно как фактическая температура.</string>
+    <string name="colder_temp">Из-за ветра кажется, что прохладнее.</string>
+    <string name="warmer_temp">Из-за влажности кажется, что теплее.</string>
+    <string name="clean_sky">Небо практически чистое.</string>
+    <string name="nonclear_sky">На улице достаточно облачно.</string>
+    <string name="no_acess">Нет доступа к геопозиции</string>
+    <string name="max_temp">Макс.: </string>
+    <string name="min_temp">°, мин.: </string>
+    <string name="sunrise">Восход: </string>
+    <string name="clear_sky">Сейчас совершенно ясно.</string>
+    <string name="not_clear_sky">Низкая видимость.</string>
+    <string name="not_not_clear_sky">Видимость снижена из-за легкой дымки.</string>
+    <string name="east">Восточный</string>
+    <string name="south">Южный</string>
+    <string name="west">Западный</string>
+    <string name="north">Северный</string>
+    <string name="ne">СВ</string>
+    <string name="se">ЮВ</string>
+    <string name="sw">ЮЗ</string>
+    <string name="nw">СЗ</string>
+    <string name="speed">Скорость: </string>
+    <string name="ms"> м/с</string>
 </resources>

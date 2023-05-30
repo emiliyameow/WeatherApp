@@ -9,7 +9,7 @@
     <color name="black_shadow">#A6000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="purple">#7F6FA0</color>
-    <color name="blue_shadow">#A681BECE</color>
+    <color name="blue_shadow">#4081BECE</color>
     <color name="background_blue">#378BA4</color>
     <color name="text_headings">#D6DFE8</color>
 </resources>
