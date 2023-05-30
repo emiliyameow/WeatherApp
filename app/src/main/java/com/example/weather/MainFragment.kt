@@ -1,7 +1,9 @@
 package com.example.weather
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Bundle
@@ -10,8 +12,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -21,9 +21,7 @@ import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
 import com.example.weather.adapters.DialogManager
 import com.example.weather.adapters.WeatherDailyAdapter
-import com.example.weather.data.CityItem
-import com.example.weather.data.DailyItem
-import com.example.weather.data.WeatherModel
+import com.example.weather.data.*
 import com.example.weather.databinding.FragmentMainBinding
 import com.example.weather.retrofit.MeteoApi
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -40,18 +38,18 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.time.LocalTime
 import kotlin.math.roundToInt
 
-
 class MainFragment : Fragment() {
-    private lateinit var fLocationClient: FusedLocationProviderClient
-    private lateinit var pLauncher: ActivityResultLauncher<String>
+    private lateinit var fusedLocation: FusedLocationProviderClient
     private lateinit var binding: FragmentMainBinding
     private lateinit var adapter: WeatherDailyAdapter
+    private lateinit var pref: SharedPreferences
     private val model : MainViewModel by activityViewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        pref = requireActivity().getPreferences(Context.MODE_PRIVATE)
         binding = FragmentMainBinding.inflate(inflater, container, false)
         return binding.root
     }
@@ -60,22 +58,16 @@ class MainFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         checkPermission()
         init()
-        getLocation()
-        updateCurrentWeather()
-    }
+        setInformationForUser(checkLocationInSettings())
 
-    private fun permissionListener(){
-        pLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()){
-        }
     }
 
     private fun init() = with(binding){
-        fLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
         searchButton.setOnClickListener {
             DialogManager.searchByNameDialog(requireContext(), object :
             DialogManager.Listener{
                 override fun onClick(name: String?){
-                    name?.let{it1 -> getWeatherByCity(name)}
+                    name?.let{ it -> getWeatherByCity(it) }
                 }
             })
         }
@@ -94,36 +86,84 @@ class MainFragment : Fragment() {
         return lm.isProviderEnabled(LocationManager.GPS_PROVIDER)
     }
 
-    private fun getLocation(){
-        val ct = CancellationTokenSource()
+    private fun checkLocationInSettings(): Int {
         if (!isLocationEnabled()){
-            Toast.makeText(requireContext(), getString(R.string.no_acess), Toast.LENGTH_SHORT).show()
-            return
+            return -1
         }
+        return 0
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS_CODE){
+            if ( grantResults[0] == PackageManager.PERMISSION_GRANTED
+                && grantResults[1] == PackageManager.PERMISSION_GRANTED
+                && permissions.contains(Manifest.permission.ACCESS_FINE_LOCATION)
+                && permissions.contains(Manifest.permission.ACCESS_COARSE_LOCATION)
+            ) {
+                getLocation()
+            } else {
+                if (alreadyHaveCoordinates()) return
+                setInformationForUser(0)
+            }
+        }
+    }
+
+    private fun checkPermission(){
+        if (!isLocationEnabled()) return
         if (ActivityCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+            ) == PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_COARSE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED
         ) {
-            return
+            getLocation()
+        } else {
+            setCityByPref()
+            requestPermissions(
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                REQUEST_PERMISSIONS_CODE
+            )
         }
-        fLocationClient
-            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, ct.token)
-            .addOnCompleteListener{
-                getCurrentWeather(it.result.latitude,it.result.longitude)
+    }
+
+    private fun setCityByPref(){
+        val long = pref.getFloat(KEY_LONG, 0F)
+        val lat = pref.getFloat(KEY_LAT, 0F)
+        if (long != 0F && lat != 0F) {
+            getDailyWeather(lat.toDouble(), long.toDouble())
+            getCurrentWeather(lat.toDouble(), long.toDouble())
+        }
+    }
+
+    private fun alreadyHaveCoordinates(): Boolean =
+        pref.getFloat(KEY_LONG, 0F) != 0F && pref.getFloat(KEY_LAT, 0F) != 0F
+
+    @SuppressLint("MissingPermission", "CommitPrefEdits")
+    private fun getLocation() {
+        val source = CancellationTokenSource()
+        fusedLocation = LocationServices
+            .getFusedLocationProviderClient(requireContext())
+
+        fusedLocation
+            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, source.token)
+            .addOnCompleteListener {
+                setInformationForUser(1)
+                pref.edit()
+                    .putFloat(KEY_LAT, it.result.latitude.toFloat())
+                    .putFloat(KEY_LONG, it.result.longitude.toFloat())
+                    .apply()
+
+                getCurrentWeather(it.result.latitude, it.result.longitude)
             }
     }
 
-    private fun checkPermission (){
-        if (!isPermissionGranted(android.Manifest.permission.ACCESS_FINE_LOCATION)){
-            permissionListener()
-            pLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-
-    }
     companion object {
 
         @JvmStatic
@@ -137,24 +177,42 @@ class MainFragment : Fragment() {
         Log.d("MyLog","Url: $url")
 
         val queue = Volley.newRequestQueue(requireContext())
-        val stringRequest = StringRequest(Request.Method.GET,
-            url,
-            {
-                    response-> parseCityData(response)
+        val stringRequest = StringRequest(
+            Request.Method.GET, url, {
+              response -> parseCityData(response)
             }, {
                 Log.d("MyLog","Volley error: $it")
             }
         )
         queue.add(stringRequest)
         model.cityData.observe(viewLifecycleOwner){
-            getDailyWeather(model.cityData.value!!.lat, model.cityData.value!!.long)
-            getCurrentWeather(model.cityData.value!!.lat, model.cityData.value!!.long)
+            with(model.cityData.value) {
+                this?.lat?.let { lat  ->
+                    long?.let { long ->
+                        pref.edit()
+                            .putFloat(KEY_LAT, lat.toFloat())
+                            .putFloat(KEY_LONG, long.toFloat())
+                            .apply()
+                        getDailyWeather(lat, long)
+                        getCurrentWeather(lat, long)
+                    } ?: setInformationForUser(2)
+                } ?: setInformationForUser(2)
+            }
         }
 
     }
 
     private fun parseCityData(result: String){
         val mainObject = JSONArray(result)
+        if (mainObject.length() <= 0) {
+            Toast.makeText(
+                requireContext(),
+                "Населенный пункт не найден. Попробуйте еще раз",
+                Toast.LENGTH_SHORT
+            ).show()
+
+            return
+        }
         val weatherFirst = mainObject[0] as JSONObject
         val item = CityItem(
             weatherFirst.getString("name"),
@@ -167,26 +225,25 @@ class MainFragment : Fragment() {
     }
 
     private fun getCurrentWeather(latitude: Double, longitude: Double) {
-
         val url = "https://api.openweathermap.org/data/2.5/weather?" +
                 "lat="+latitude.toString()+"&lon="+longitude.toString()+"&units=metric&appid=$API_KEY&lang=ru"
-        Log.d("MyLog", "longitude:$longitude");
-        Log.d("MyLog", "latitude:$latitude");
-        Log.d("MyLog","Url: $url")
-
-        val queue = Volley.newRequestQueue(requireContext())
-        val stringRequest = StringRequest(Request.Method.GET,
-            url,
-            {
-                    response-> parseWeatherData(response)
-                Log.d("MyLog","Everything is right!!: $response")
-            }, {
-                Log.d("MyLog","Volley error: $it")
-            }
-        )
-        queue.add(stringRequest)
-
-        getDailyWeather(latitude, longitude)
+        try {
+            val queue = Volley.newRequestQueue(requireContext())
+            val stringRequest = StringRequest(Request.Method.GET,
+                url,
+                {
+                        response-> parseWeatherData(response)
+                    setData()
+                    Log.d("MyLog","Everything is right!!: $response")
+                }, {
+                    Log.d("MyLog","Volley error: $it")
+                }
+            )
+            queue.add(stringRequest)
+            getDailyWeather(latitude, longitude)
+        } catch (e: Exception) {
+            Log.d("MyLog", "Everything isn't right :( ${e.message}")
+        }
     }
 
 
@@ -198,7 +255,7 @@ class MainFragment : Fragment() {
         val items = mutableListOf<DailyItem>()
         CoroutineScope(Dispatchers.Main).launch {
             val api = retrofit.create(MeteoApi::class.java)
-            val dailyModell = api.getDailyWeatherByCoordinates(
+            val dailyModel = api.getDailyWeatherByCoordinates(
                 latitude,
                 longitude,
                 "temperature_2m_max,temperature_2m_min,weathercode",
@@ -206,64 +263,66 @@ class MainFragment : Fragment() {
 
             for (i in 0..6){
                 items.add(i, DailyItem(
-                    dailyModell.daily.temperature_2m_min[i],
-                    dailyModell.daily.temperature_2m_max[i],
-                    dailyModell.daily.weathercode[i],
-                    dailyModell.daily.time[i]))
+                    dailyModel.daily.temperature_2m_min[i],
+                    dailyModel.daily.temperature_2m_max[i],
+                    dailyModel.daily.weathercode[i],
+                    dailyModel.daily.time[i]))
             }
 
-            Log.d("MyLog","Url: $dailyModell")
+            Log.d("MyLog","Url: $dailyModel")
             initRecyclerView(items)
         }
     }
 
-    private fun updateCurrentWeather() = with (binding){
+    @SuppressLint("SetTextI18n")
+    fun setData() = with(binding) {
         model.liveDataCurrent.observe(viewLifecycleOwner){
             city.text = it.city
             weather.text=it.weather
             weather.visibility= View.VISIBLE
-            currentTemp.text = (it.temp.roundToInt()).toString()+getString(R.string.Degree)
-            maxAndMinTemp.text=getString(R.string.max_temp)+it.temp_max.roundToInt().toString()+getString(
-                            R.string.min_temp)+ it.temp_min.roundToInt().toString()+getString(R.string.Degree)
+            currentTemp.text = it.temp.roundToInt().toString()+getString(R.string.Degree)
+            maxAndMinTemp.text=getString(R.string.max_temp)+ it.temp_max.roundToInt().toString()+getString(
+                R.string.min_temp)+ it.temp_min.roundToInt().toString()+getString(R.string.Degree)
             maxAndMinTemp.visibility = View.VISIBLE
 
             val unixSunrise = it.sunrise+it.timezone
             val unixSunset = it.sunset+it.timezone
+
             sunrise.text= getString(R.string.sunrise)+java.time.format
                 .DateTimeFormatter.ISO_INSTANT
                 .format(java.time.Instant.ofEpochSecond(unixSunrise.toLong()))
                 .substringAfter('T').substringBeforeLast(':')
+
             sunset.text=java.time.format.DateTimeFormatter.ISO_INSTANT
                 .format(java.time.Instant.ofEpochSecond(unixSunset.toLong())).
                 substringAfter('T').substringBeforeLast(':')
-            scrollViewBackground.setBackgroundResource(R.drawable.cloudy_background)
 
-            val time = LocalTime.now()
+            val time = getTime(LocalTime.now().hour)
+
             when (it.weatherMain){
                 "Thunderstorm" -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.thunder_sun)
+                    scrollViewBackground.setBackgroundResource(getImageForThunder(time))
                 }
                 "Drizzle" -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.light_rain_sun)
+                    scrollViewBackground.setBackgroundResource(getImageForDrizzle(time))
                 }
                 "Rain" -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.back_rain_day)
+                    scrollViewBackground.setBackgroundResource(getImageForRain(time))
                 }
                 "Snow" -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.snow_day)
+                    scrollViewBackground.setBackgroundResource(getImageForSnow(time))
                 }
                 "Clear" -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.back_clean_day)
+                    scrollViewBackground.setBackgroundResource(getImageForClear(time))
                 }
                 "Clouds" -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.back_cloud_day)
+                    scrollViewBackground.setBackgroundResource(getImageForCloudy(time))
                 }
                 else -> {
-                    scrollViewBackground.setBackgroundResource(R.drawable.fog_day)
+                    scrollViewBackground.setBackgroundResource(getImageForFog(time))
                 }
 
             }
-
 
             visibility.text=(it.visibility/1000).toString()+" км"
             if (it.visibility/1000>=10){
@@ -313,7 +372,7 @@ class MainFragment : Fragment() {
             if (it.humidity<=35)
                 humidityDescription.text=getString(R.string.low_humidity)
 
-            feelsLike.text=it.feels_like.roundToInt().toString()+"°"
+            feelsLike.text=it.feels_like.roundToInt().toString()+getString(R.string.Degree)
             if (it.feels_like.roundToInt()==it.temp.roundToInt()){
                 feelsLikeDescription.text=getString(R.string.fact_temp)
             }
@@ -323,11 +382,21 @@ class MainFragment : Fragment() {
             else {
                 feelsLikeDescription.text=getString(R.string.warmer_temp)
             }
-            textBlocked.visibility = View.INVISIBLE
             sunsetAndVisibility.visibility = View.VISIBLE
             windAndCloudiness.visibility = View.VISIBLE
             feelsLikeAndHumidity.visibility = View.VISIBLE
-           }
+            textBlocked.visibility = View.GONE
+        }
+    }
+
+    private fun setInformationForUser(flag: Int) = with (binding) {
+        infoText.text = when (flag) {
+            0 -> "Нет разрешения на геолокацию. Для отображения погоды выберите город."
+            -1 -> "Службы GPS выключены на устройстве."
+            2 -> "Населенный пункт не найден. Попробуйте еще раз"
+            else -> "Мы подгружаем ваши данные..."
+        }
+        textBlocked.visibility = View.VISIBLE
     }
 
     private fun parseWeatherData(result: String){
@@ -358,4 +427,9 @@ class MainFragment : Fragment() {
     }
 }
 
-const val API_KEY = ""
+private const val API_KEY = "02e1bd713b4d87a495ba708a47621ac9"
+private const val REQUEST_PERMISSIONS_CODE = 2
+private const val KEY_LONG ="key_long"
+private const val KEY_LAT ="key_lat"
+
+
