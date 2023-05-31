@@ -159,8 +159,13 @@ class MainFragment : Fragment() {
                     .putFloat(KEY_LAT, it.result.latitude.toFloat())
                     .putFloat(KEY_LONG, it.result.longitude.toFloat())
                     .apply()
+                try {
+                    getCurrentWeather(it.result.latitude, it.result.longitude)
+                }
+                catch (e: Exception){
+                    setInformationForUser(3)
+                }
 
-                getCurrentWeather(it.result.latitude, it.result.longitude)
             }
     }
 
@@ -175,29 +180,32 @@ class MainFragment : Fragment() {
                 "q="+result+"&limit=5&appid=$API_KEY"
 
         Log.d("MyLog","Url: $url")
-
-        val queue = Volley.newRequestQueue(requireContext())
-        val stringRequest = StringRequest(
-            Request.Method.GET, url, {
-              response -> parseCityData(response)
-            }, {
-                Log.d("MyLog","Volley error: $it")
-            }
-        )
-        queue.add(stringRequest)
-        model.cityData.observe(viewLifecycleOwner){
-            with(model.cityData.value) {
-                this?.lat?.let { lat  ->
-                    long?.let { long ->
-                        pref.edit()
-                            .putFloat(KEY_LAT, lat.toFloat())
-                            .putFloat(KEY_LONG, long.toFloat())
-                            .apply()
-                        getDailyWeather(lat, long)
-                        getCurrentWeather(lat, long)
+        try {
+            val queue = Volley.newRequestQueue(requireContext())
+            val stringRequest = StringRequest(
+                Request.Method.GET, url, {
+                        response -> parseCityData(response)
+                }, {
+                    Log.d("MyLog","Volley error: $it")
+                }
+            )
+            queue.add(stringRequest)
+            model.cityData.observe(viewLifecycleOwner){
+                with(model.cityData.value) {
+                    this?.lat?.let { lat  ->
+                        long?.let { long ->
+                            pref.edit()
+                                .putFloat(KEY_LAT, lat.toFloat())
+                                .putFloat(KEY_LONG, long.toFloat())
+                                .apply()
+                            getDailyWeather(lat, long)
+                            getCurrentWeather(lat, long)
+                        } ?: setInformationForUser(2)
                     } ?: setInformationForUser(2)
-                } ?: setInformationForUser(2)
+                }
             }
+        } catch(e: Exception) {
+            setInformationForUser(3)
         }
 
     }
@@ -227,21 +235,26 @@ class MainFragment : Fragment() {
     private fun getCurrentWeather(latitude: Double, longitude: Double) {
         val url = "https://api.openweathermap.org/data/2.5/weather?" +
                 "lat="+latitude.toString()+"&lon="+longitude.toString()+"&units=metric&appid=$API_KEY&lang=ru"
+        var flagVolley = true
         try {
             val queue = Volley.newRequestQueue(requireContext())
             val stringRequest = StringRequest(Request.Method.GET,
                 url,
                 {
-                        response-> parseWeatherData(response)
+                    response-> parseWeatherData(response)
                     setData()
                     Log.d("MyLog","Everything is right!!: $response")
                 }, {
+                    flagVolley = false
                     Log.d("MyLog","Volley error: $it")
                 }
             )
             queue.add(stringRequest)
-            getDailyWeather(latitude, longitude)
+            if (flagVolley) {
+                getDailyWeather(latitude, longitude)
+            }
         } catch (e: Exception) {
+            setInformationForUser(3)
             Log.d("MyLog", "Everything isn't right :( ${e.message}")
         }
     }
@@ -254,23 +267,33 @@ class MainFragment : Fragment() {
             .build()
         val items = mutableListOf<DailyItem>()
         CoroutineScope(Dispatchers.Main).launch {
-            val api = retrofit.create(MeteoApi::class.java)
-            val dailyModel = api.getDailyWeatherByCoordinates(
-                latitude,
-                longitude,
-                "temperature_2m_max,temperature_2m_min,weathercode",
-                "auto")
+            try {
+                val api = retrofit.create(MeteoApi::class.java)
+                val dailyModel = api.getDailyWeatherByCoordinates(
+                    latitude,
+                    longitude,
+                    "temperature_2m_max,temperature_2m_min,weathercode",
+                    "auto"
+                )
 
-            for (i in 0..6){
-                items.add(i, DailyItem(
-                    dailyModel.daily.temperature_2m_min[i],
-                    dailyModel.daily.temperature_2m_max[i],
-                    dailyModel.daily.weathercode[i],
-                    dailyModel.daily.time[i]))
+                for (i in 0..6) {
+                    items.add(
+                        i, DailyItem(
+                            dailyModel.daily.temperature_2m_min[i],
+                            dailyModel.daily.temperature_2m_max[i],
+                            dailyModel.daily.weathercode[i],
+                            dailyModel.daily.time[i]
+                        )
+                    )
+                }
+
+                Log.d("MyLog", "Url: $dailyModel")
+                initRecyclerView(items)
+
+            } catch (e: Exception) {
+                setInformationForUser(3)
+                Log.d("MyLog", "Exception: $e")
             }
-
-            Log.d("MyLog","Url: $dailyModel")
-            initRecyclerView(items)
         }
     }
 
@@ -394,6 +417,7 @@ class MainFragment : Fragment() {
             0 -> "Нет разрешения на геолокацию. Для отображения погоды выберите город."
             -1 -> "Службы GPS выключены на устройстве."
             2 -> "Населенный пункт не найден. Попробуйте еще раз"
+            3 -> "Проблемы с подключением к интернету. Попробуйте еще раз"
             else -> "Мы подгружаем ваши данные..."
         }
         textBlocked.visibility = View.VISIBLE
