@@ -114,7 +114,10 @@ class MainFragment : Fragment() {
     }
 
     private fun checkPermission(){
-        if (!isLocationEnabled()) return
+        if (!isLocationEnabled()) {
+            setCityByPref()
+            return
+        }
         if (ActivityCompat.checkSelfPermission(
                 requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION
