@@ -40,8 +40,8 @@
 - добавление настроек
 - добавление прогноза погоды на день
 
-#### Презентация реализованной разметки
-<img width="250" src="https://github.com/emiliyameow/images/blob/e7c9d67f30e142c937dad49b316d984a1ed23782/%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202023-02-28%20%D0%B2%2016.08.41.png"> <img width="250" src="https://github.com/emiliyameow/images/blob/e7c9d67f30e142c937dad49b316d984a1ed23782/%D0%A1%D0%BD%D0%B8%D0%BC%D0%BE%D0%BA%20%D1%8D%D0%BA%D1%80%D0%B0%D0%BD%D0%B0%202023-02-28%20%D0%B2%2016.09.12.png">
+#### Скриншоты реализованного приложения
+<img width="250" src="https://github.com/emiliyameow/images/blob/main/Screenshot_20230602_014319.png"> <img width="250" src="https://github.com/emiliyameow/images/blob/main/Screenshot_20230602_014328.png">
 
 
 
