@@ -140,7 +140,6 @@ class MainFragment : Fragment() {
         val long = pref.getFloat(KEY_LONG, 0F)
         val lat = pref.getFloat(KEY_LAT, 0F)
         if (long != 0F && lat != 0F) {
-            getDailyWeather(lat.toDouble(), long.toDouble())
             getCurrentWeather(lat.toDouble(), long.toDouble())
         }
     }
@@ -201,7 +200,6 @@ class MainFragment : Fragment() {
                                 .putFloat(KEY_LAT, lat.toFloat())
                                 .putFloat(KEY_LONG, long.toFloat())
                                 .apply()
-                            getDailyWeather(lat, long)
                             getCurrentWeather(lat, long)
                         } ?: setInformationForUser(2)
                     } ?: setInformationForUser(2)
@@ -454,7 +452,7 @@ class MainFragment : Fragment() {
     }
 }
 
-private const val API_KEY = "02e1bd713b4d87a495ba708a47621ac9"
+private const val API_KEY = ""
 private const val REQUEST_PERMISSIONS_CODE = 2
 private const val KEY_LONG ="key_long"
 private const val KEY_LAT ="key_lat"
